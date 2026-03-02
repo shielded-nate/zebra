@@ -6,8 +6,7 @@
 # possible for "any rust workspace project", with `zebra`-specific
 # parameters passed as the second argument attrset on import.
 
-# flake-inputs:
-{
+flake-inputs@{
   self,
   nixpkgs,
   crane,
@@ -16,165 +15,195 @@
   advisory-db,
 }:
 # Our application-specific parameters:
-{
-  pname,
+app-inputs@{
+  project-name,
   src-root,
   rust-toolchain-toml,
-  system,
 }:
-let
-  pkgs = import nixpkgs {
-    inherit system;
-    overlays = [ (import rust-overlay) ];
-  };
+flake-inputs.flake-utils.lib.eachDefaultSystem (
+  system:
+  let
+    # Local utility library:
+    flakelib = import ./flakelib.nix flake-inputs {
+      pname = "${project-name}-workspace";
+      inherit src-root rust-toolchain-toml system;
+    };
 
-  # crane-lib provides a rust build/deps API bound to `pkgs` with the rust toolchain version specified in `./rust-toolchain.toml`:
-  crane-lib =
-    let
-      # This function is named for call-site readability:
-      fromToolchainFile = p: p.rust-bin.fromRustupToolchainFile rust-toolchain-toml;
-    in
-    (crane.mkLib pkgs).overrideToolchain fromToolchainFile;
+    inherit (flakelib)
+      build-rust-workspace
+      crane-dev-shell
+      links-table
+      nixpkgs
+      run-command
+      select-source
+      relative-paths
+      ;
 
-  flakelib = {
-    nixpkgs = pkgs;
-    crane-dev-shell = crane-lib.devShell;
+    # We use this style of nix formatting in checks and the dev shell:
+    nixfmt = nixpkgs.nixfmt-rfc-style;
 
-    # select-source :: {
-    #   name :: String,
-    #   paths :: [ Path or FileSet ],
-    # } -> Source
-    #
-    # Create a Source with the given name which includes the given
-    # paths that can be directories or files. When a directory is
-    # encountered, all contained contents are also included.
-    select-source =
-      { name-suffix, paths }:
+    # We use the latest nixpkgs `libclang`:
+    inherit (nixpkgs.llvmPackages) libclang;
+
+    src-book = select-source {
+      name-suffix = "book";
+      paths = relative-paths src-root [
+        "/book"
+        "/README.md"
+      ];
+    };
+
+    src-rust = select-source {
+      name-suffix = "rust";
+      paths = relative-paths src-root [
+        "/.cargo"
+        "/.config"
+        "/Cargo.lock"
+        "/Cargo.toml"
+        "/clippy.toml"
+        "/crosslink-test-data"
+        "/release.toml"
+        "/rust-toolchain.toml"
+        "/tower-batch-control"
+        "/tower-fallback"
+        "/zebra-chain"
+        "/zebra-consensus"
+        "/zebra-crosslink"
+        "/zebra-grpc"
+        "/zebra-network"
+        "/zebra-node-services"
+        "/zebra-rpc"
+        "/zebra-scan"
+        "/zebra-script"
+        "/zebra-state"
+        "/zebra-test"
+        "/zebra-utils"
+        "/zebrad"
+      ];
+    };
+
+    zebrad-outputs = build-rust-workspace (src-root + "/zebrad") {
+      src = src-rust;
+
+      strictDeps = true;
+
+      # Note: we disable tests since we'll run them all via cargo-nextest
+      doCheck = false;
+
+      # Use the clang stdenv, overriding any downstream attempt to alter it:
+      stdenv = _: nixpkgs.llvmPackages.stdenv;
+
+      nativeBuildInputs = with nixpkgs; [
+        pkg-config
+        protobuf
+      ];
+
+      buildInputs = with nixpkgs; [
+        libclang
+        rocksdb
+      ];
+
+      # Additional environment variables can be set directly
+      LIBCLANG_PATH = "${libclang.lib}/lib";
+    };
+
+    zebrad = zebrad-outputs.pkg;
+
+    zebra-book = nixpkgs.stdenv.mkDerivation rec {
+      name = "zebra-book";
+      src = src-book;
+      buildInputs = with nixpkgs; [
+        graphviz
+        mdbook
+        mdbook-admonish
+        mdbook-graphviz
+        mdbook-katex
+        mdbook-linkcheck
+      ];
+      builder = nixpkgs.writeShellScript "${name}-builder.sh" ''
+        mkdir "$out"
+        mdbook build --dest-dir "$out/book/book" "$src/book" 2>&1 | tee "$out/mdbook.build.log"
+        # TODO: Add tighten `grep` rgx to disallow all errors and warnings
+        if grep -E 'ERROR' "$out/mdbook.build.log"
+        then
+          echo 'Failing due to mdbook errors/warnings.'
+          exit 1
+        fi
+      '';
+    };
+  in
+  {
+    packages = (
       let
-        inherit (builtins) map;
-        inherit (pkgs.lib.fileset) toSource unions;
-        inherit (pkgs.lib.trivial) flip;
-        inherit (pkgs) symlinkJoin;
-        inherit (flakelib) run-command;
-
-        base-name = "${pname}-src-${name-suffix}";
-
-        # NB: We have to un-symlink as a work-around for a crane bug:
-        copy-symlinks = p: run-command base-name [ ] ''cp -rL '${p}' "$out"'';
-      in
-      copy-symlinks (symlinkJoin {
-        name = "${base-name}-symlinks";
-        paths = [
-          (toSource {
-            root = src-root;
-            fileset = unions paths;
-          })
-        ];
-      });
-
-    # links-table :: (Name :: String) -> { relpath -> [Deriv or Path] } -> Derivation
-    #
-    # Create a derivation which maps relpath's to target paths or
-    # derivations which come from a table (attrset names are relpaths).
-    links-table =
-      let
-        inherit (pkgs.lib.attrsets) mapAttrsToList;
-        inherit (pkgs) linkFarm;
-
-        kv-to-entry = name: path: { inherit name path; };
-      in
-      name-suffix: table: linkFarm "${pname}-${name-suffix}" (mapAttrsToList kv-to-entry table);
-
-    # run-command :: (name-suffix :: String) -> [ BuildInputs ] -> Script -> Derivation
-    #
-    # A wrapper around pkgs.runCommand specialized to take only `buildInputs`.
-    run-command =
-      name-suffix: buildInputs: script:
-      pkgs.runCommand "${pname}-cmd-${name-suffix}" { inherit buildInputs; } script;
-
-    # build-rust-workspace :: (crate :: Path) -> (common-args :: Attrset) -> { pkg :: Derivation, checks, args, artifacts }
-    #
-    # Provide derivations for a crates binaries, arguments, dependency
-    # artifacts, and various flake checks.
-    build-rust-workspace =
-      target-crate: common:
-      let
-        # Build *just* the cargo dependencies (of the entire workspace),
-        # so we can reuse all of that work (e.g. via cachix) when running in CI
-        artifacts = crane-lib.buildDepsOnly (
-          common
-          // {
-            pname = "${pname}-dependency-artifacts";
-            version = "0.0.0"; # TODO: Fix this to workspace-wide version
-          }
-        );
-
-        args = {
-          inherit common;
-
-          crate = (
-            let
-              cargoToml = target-crate + "/Cargo.toml";
-              meta = crane-lib.crateNameFromCargoToml { inherit cargoToml; };
-            in
-            common
-            // {
-              cargoArtifacts = artifacts;
-              inherit (meta) pname version;
-            }
-          );
+        base-pkgs = {
+          inherit
+            zebrad
+            zebra-book
+            src-book
+            src-rust
+            ;
         };
 
-      in
-      {
-        inherit args artifacts;
-
-        pkg = crane-lib.buildPackage args.crate;
-
-        checks = {
-          # clippy = crane-lib.cargoClippy (args.crate // {
-          #   cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-          # });
-
-          # TODO: make this a standard build package:
-          cargo-doc = crane-lib.cargoDoc args.crate;
-
-          rustfmt = crane-lib.cargoFmt args.crate;
-
-          # toml-format = crane-lib.taploFmt {
-          #   src = pkgs.lib.sources.sourceFilesBySuffices src-root [ ".toml" ];
-          #   # taplo arguments can be further customized below as needed
-          #   # taploExtraArgs = "--config ./taplo.toml";
-          # };
-
-          # Audit dependencies
-          #
-          # TODO: Most projects that don't use this frequently have errors due to known vulnerabilities in transitive dependencies! We should probably re-enable them on a cron-job (since new disclosures may appear at any time and aren't a property of a revision alone).
-          #
-          # audit = crane-lib.cargoAudit (args.common // {
-          #   inherit src advisory-db;
-          # });
-
-          # Audit licenses
-          #
-          # TODO: Zebra fails these license checks.
-          #
-          # cargo-deny = crane-lib.cargoDeny args.common;
-
-          # Run tests with cargo-nextest
-          # Consider setting `doCheck = false` on other crate derivations
-          # if you do not want the tests to run twice
-          #
-          # TODO: Ensure the "PR merge acceptance" tests are run identically to CI:
-          cargo-nextest = crane-lib.cargoNextest (
-            args.crate
-            // {
-              partitions = 1;
-              partitionType = "count";
-            }
-          );
+        all = links-table "all" {
+          "./bin" = "${zebrad}/bin";
+          "./book" = "${zebra-book}/book";
+          "./src/${project-name}/book" = "${src-book}/book";
+          "./src/${project-name}/rust" = src-rust;
         };
-      };
-  };
-in
-flakelib
+      in
+
+      base-pkgs
+      // {
+        inherit all;
+        default = all;
+      }
+    );
+
+    checks = (
+      zebrad-outputs.checks
+      // {
+        # Build the crates as part of `nix flake check` for convenience
+        inherit zebrad;
+
+        # Check formatting
+        nixfmt-check = run-command "nixfmt" [ nixfmt ] ''
+          set -efuo pipefail
+          exitcode=0
+          for f in $(find '${src-root}' -type f -name '*.nix')
+          do
+            cmd="nixfmt --check --strict \"$f\""
+            echo "+ $cmd"
+            eval "$cmd" || exitcode=1
+          done
+          [ "$exitcode" -eq 0 ] && touch "$out" # signal success to nix
+          exit "$exitcode"
+        '';
+      }
+    );
+
+    apps = {
+      zebrad = flake-inputs.flake-utils.lib.mkApp { drv = zebrad; };
+    };
+
+    # TODO: BEWARE: This dev shell may have buggy deviations from the build.
+    devShells.default = crane-dev-shell {
+      inputsFrom = [
+        zebrad
+        zebra-book
+      ];
+
+      packages = with nixpkgs; [ cargo-nextest ];
+
+      LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath (
+        with nixpkgs;
+        [
+          libGL
+          libxkbcommon
+          xorg.libX11
+          xorg.libxcb
+          xorg.libXi
+        ]
+      );
+    };
+  }
+)
