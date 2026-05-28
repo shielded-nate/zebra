@@ -19,25 +19,25 @@
 
       zebradPackage = mkBinaryPackage {
         name = "zebrad";
-        cargoToml = ../zebrad/Cargo.toml;
+        cargoToml = ../../zebrad/Cargo.toml;
         cargoExtraArgs = "--locked -p zebrad --bin zebrad";
       };
 
       zebraCheckpointsPackage = mkBinaryPackage {
         name = "zebra-checkpoints";
-        cargoToml = ../zebra-utils/Cargo.toml;
+        cargoToml = ../../zebra-utils/Cargo.toml;
         cargoExtraArgs = "--locked -p zebra-utils --features zebra-checkpoints --bin zebra-checkpoints";
       };
 
       searchIssueRefsPackage = mkBinaryPackage {
         name = "search-issue-refs";
-        cargoToml = ../zebra-utils/Cargo.toml;
+        cargoToml = ../../zebra-utils/Cargo.toml;
         cargoExtraArgs = "--locked -p zebra-utils --features search-issue-refs --bin search-issue-refs";
       };
 
       blockTemplateToProposalPackage = mkBinaryPackage {
         name = "block-template-to-proposal";
-        cargoToml = ../zebra-utils/Cargo.toml;
+        cargoToml = ../../zebra-utils/Cargo.toml;
         cargoExtraArgs = "--locked -p zebra-utils --bin block-template-to-proposal";
       };
 
