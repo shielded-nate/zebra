@@ -8,7 +8,7 @@
       };
 
       inherit (helpers)
-        cargoArtifacts
+        checkCargoArtifacts
         commonArgs
         craneLib
         mkBinaryPackage
@@ -19,21 +19,25 @@
 
       zebradPackage = mkBinaryPackage {
         name = "zebrad";
+        cargoToml = ../zebrad/Cargo.toml;
         cargoExtraArgs = "--locked -p zebrad --bin zebrad";
       };
 
       zebraCheckpointsPackage = mkBinaryPackage {
         name = "zebra-checkpoints";
+        cargoToml = ../zebra-utils/Cargo.toml;
         cargoExtraArgs = "--locked -p zebra-utils --features zebra-checkpoints --bin zebra-checkpoints";
       };
 
       searchIssueRefsPackage = mkBinaryPackage {
         name = "search-issue-refs";
+        cargoToml = ../zebra-utils/Cargo.toml;
         cargoExtraArgs = "--locked -p zebra-utils --features search-issue-refs --bin search-issue-refs";
       };
 
       blockTemplateToProposalPackage = mkBinaryPackage {
         name = "block-template-to-proposal";
+        cargoToml = ../zebra-utils/Cargo.toml;
         cargoExtraArgs = "--locked -p zebra-utils --bin block-template-to-proposal";
       };
 
@@ -64,22 +68,22 @@
         };
 
         clippy = craneLib.cargoClippy (commonArgs // {
-          inherit cargoArtifacts;
+          cargoArtifacts = checkCargoArtifacts;
           cargoClippyExtraArgs = "--locked --workspace --all-targets --features default-release-binaries -- -D warnings";
         });
 
-        check = craneLib.cargoCheck (commonArgs // {
-          inherit cargoArtifacts;
-          cargoExtraArgs = "--locked --workspace --all-targets --features default-release-binaries";
+        clippy-tests = craneLib.cargoClippy (commonArgs // {
+          cargoArtifacts = checkCargoArtifacts;
+          cargoClippyExtraArgs = "--locked --workspace --all-targets --features 'default-release-binaries proptest-impl lightwalletd-grpc-tests zebra-checkpoints' -- -D warnings";
         });
 
-        check-all-features = craneLib.cargoCheck (commonArgs // {
-          inherit cargoArtifacts;
+        check = craneLib.cargoCheck (commonArgs // {
+          cargoArtifacts = checkCargoArtifacts;
           cargoExtraArgs = "--locked --workspace --all-features --all-targets";
         });
 
         test = craneLib.cargoTest (commonArgs // {
-          inherit cargoArtifacts;
+          cargoArtifacts = checkCargoArtifacts;
           cargoExtraArgs = "--locked --workspace";
         });
 

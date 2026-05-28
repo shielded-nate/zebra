@@ -29,23 +29,32 @@ let
     ROCKSDB_LIB_DIR = "${pkgs.rocksdb}/lib";
   };
 
-  cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
+  packageCargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
+    cargoExtraArgs = "--locked --workspace";
+  });
+
+  checkCargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
     cargoExtraArgs = "--locked --workspace --all-features --all-targets";
   });
 in
 {
-  inherit pkgs toolchain craneLib src commonArgs cargoArtifacts;
+  inherit pkgs toolchain craneLib src commonArgs packageCargoArtifacts checkCargoArtifacts;
 
   mkBinaryPackage =
     {
       name,
+      cargoToml,
       cargoExtraArgs,
       mainProgram ? name,
     }:
+    let
+      crateInfo = craneLib.crateNameFromCargoToml { inherit cargoToml; };
+    in
     craneLib.buildPackage (commonArgs // {
       pname = name;
-      version = "unstable";
-      inherit cargoArtifacts cargoExtraArgs;
+      version = crateInfo.version;
+      cargoArtifacts = packageCargoArtifacts;
+      inherit cargoExtraArgs;
       doCheck = false;
       meta.mainProgram = mainProgram;
     });
