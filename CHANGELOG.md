@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 
 - Startup warning on Linux when `net.ipv4.tcp_slow_start_after_idle` is enabled (which resets TCP congestion windows between block requests and significantly reduces single-peer block-propagation throughput on long-haul links), with a "Linux TCP tuning for block propagation" troubleshooting section ([#10513](https://github.com/ZcashFoundation/zebra/pull/10513))
 - Support ZIP-213
+- Nix flake support based on `flake-parts`, including `nix build` for Zebra binaries, a `nix develop` shell for local Rust builds, and `nix flake check` workspace validation
 
 ### Fixed
 

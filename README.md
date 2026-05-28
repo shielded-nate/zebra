@@ -67,6 +67,17 @@ compiler. Below are quick summaries for installing these dependencies.
 
 </details>
 
+#### Dependencies with Nix
+
+This repository includes a Nix flake that provides Zebra's build outputs and a
+development shell:
+
+```sh
+nix build
+nix develop -c cargo build
+nix flake check
+```
+
 [//]: # "The empty lines in the `summary` tag below are required for correct Markdown rendering."
 
 <details><summary>

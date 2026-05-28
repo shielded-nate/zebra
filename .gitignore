@@ -4,6 +4,7 @@
 .zebra-state/
 # Nix configs
 shell.nix
+result
 # Docker compose env files
 *.env
 
@@ -172,4 +173,3 @@ zebra-rpc/qa/cache/
 # fuzzing artifacts
 zebra-chain/fuzz/artifacts
 zebra-chain/fuzz/corpus
-
