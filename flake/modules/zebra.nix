@@ -41,7 +41,7 @@
         cargoExtraArgs = "--locked -p zebra-utils --bin block-template-to-proposal";
       };
 
-      zebraBinaries = pkgs.symlinkJoin {
+      zebraBinariesPackage = pkgs.symlinkJoin {
         name = "zebra-binaries";
         paths = [
           zebradPackage
@@ -59,7 +59,7 @@
         zebra-checkpoints = zebraCheckpointsPackage;
         search-issue-refs = searchIssueRefsPackage;
         block-template-to-proposal = blockTemplateToProposalPackage;
-        default = zebraBinaries;
+        default = zebraBinariesPackage;
       };
 
       checks = {
@@ -97,7 +97,7 @@
           cargoExtraArgs = "--locked --workspace";
         });
 
-        zebra-binaries = zebraBinaries;
+        zebra-binaries = zebraBinariesPackage;
       };
 
       devShells.default = pkgs.mkShell {
