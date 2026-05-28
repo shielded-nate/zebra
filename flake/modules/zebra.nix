@@ -16,40 +16,46 @@
         src
         toolchain
         ;
+
+      zebradPackage = mkBinaryPackage {
+        name = "zebrad";
+        cargoExtraArgs = "--locked -p zebrad --bin zebrad";
+      };
+
+      zebraCheckpointsPackage = mkBinaryPackage {
+        name = "zebra-checkpoints";
+        cargoExtraArgs = "--locked -p zebra-utils --features zebra-checkpoints --bin zebra-checkpoints";
+      };
+
+      searchIssueRefsPackage = mkBinaryPackage {
+        name = "search-issue-refs";
+        cargoExtraArgs = "--locked -p zebra-utils --features search-issue-refs --bin search-issue-refs";
+      };
+
+      blockTemplateToProposalPackage = mkBinaryPackage {
+        name = "block-template-to-proposal";
+        cargoExtraArgs = "--locked -p zebra-utils --bin block-template-to-proposal";
+      };
+
+      zebraBinaries = pkgs.symlinkJoin {
+        name = "zebra-binaries";
+        paths = [
+          zebradPackage
+          zebraCheckpointsPackage
+          searchIssueRefsPackage
+          blockTemplateToProposalPackage
+        ];
+      };
     in
     {
       formatter = pkgs.nixfmt-rfc-style;
 
-      packages = rec {
-        zebrad = mkBinaryPackage {
-          name = "zebrad";
-          cargoExtraArgs = "--locked -p zebrad --bin zebrad";
-        };
-
-        zebra-checkpoints = mkBinaryPackage {
-          name = "zebra-checkpoints";
-          cargoExtraArgs = "--locked -p zebra-utils --features zebra-checkpoints --bin zebra-checkpoints";
-        };
-
-        search-issue-refs = mkBinaryPackage {
-          name = "search-issue-refs";
-          cargoExtraArgs = "--locked -p zebra-utils --features search-issue-refs --bin search-issue-refs";
-        };
-
-        block-template-to-proposal = mkBinaryPackage {
-          name = "block-template-to-proposal";
-          cargoExtraArgs = "--locked -p zebra-utils --bin block-template-to-proposal";
-        };
-
-        default = pkgs.symlinkJoin {
-          name = "zebra-binaries";
-          paths = [
-            zebrad
-            zebra-checkpoints
-            search-issue-refs
-            block-template-to-proposal
-          ];
-        };
+      packages = {
+        zebrad = zebradPackage;
+        zebra-checkpoints = zebraCheckpointsPackage;
+        search-issue-refs = searchIssueRefsPackage;
+        block-template-to-proposal = blockTemplateToProposalPackage;
+        default = zebraBinaries;
       };
 
       checks = rec {
@@ -72,7 +78,7 @@
           cargoExtraArgs = "--locked --workspace";
         });
 
-        zebra-binaries = packages.default;
+        zebra-binaries = zebraBinaries;
       };
 
       devShells.default = pkgs.mkShell {
