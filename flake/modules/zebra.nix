@@ -65,10 +65,15 @@
 
         clippy = craneLib.cargoClippy (commonArgs // {
           inherit cargoArtifacts;
-          cargoClippyExtraArgs = "--locked --workspace --all-features --all-targets -- -D warnings";
+          cargoClippyExtraArgs = "--locked --workspace --all-targets --features default-release-binaries -- -D warnings";
         });
 
         check = craneLib.cargoCheck (commonArgs // {
+          inherit cargoArtifacts;
+          cargoExtraArgs = "--locked --workspace --all-targets --features default-release-binaries";
+        });
+
+        check-all-features = craneLib.cargoCheck (commonArgs // {
           inherit cargoArtifacts;
           cargoExtraArgs = "--locked --workspace --all-features --all-targets";
         });
