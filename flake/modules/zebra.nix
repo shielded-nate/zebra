@@ -67,6 +67,11 @@
           inherit src;
         };
 
+        clippy = craneLib.cargoClippy (commonArgs // {
+          cargoArtifacts = checkCargoArtifacts;
+          cargoClippyExtraArgs = "--locked --workspace --all-targets -- -D warnings";
+        });
+
         clippy-release = craneLib.cargoClippy (commonArgs // {
           cargoArtifacts = checkCargoArtifacts;
           cargoClippyExtraArgs = "--locked --workspace --all-targets --features default-release-binaries -- -D warnings";
@@ -78,6 +83,11 @@
         });
 
         check = craneLib.cargoCheck (commonArgs // {
+          cargoArtifacts = checkCargoArtifacts;
+          cargoExtraArgs = "--locked --workspace --all-targets";
+        });
+
+        check-all-features = craneLib.cargoCheck (commonArgs // {
           cargoArtifacts = checkCargoArtifacts;
           cargoExtraArgs = "--locked --workspace --all-features --all-targets";
         });
