@@ -62,12 +62,12 @@
         default = zebraBinaries;
       };
 
-      checks = rec {
+      checks = {
         fmt = craneLib.cargoFmt {
           inherit src;
         };
 
-        clippy = craneLib.cargoClippy (commonArgs // {
+        clippy-release = craneLib.cargoClippy (commonArgs // {
           cargoArtifacts = checkCargoArtifacts;
           cargoClippyExtraArgs = "--locked --workspace --all-targets --features default-release-binaries -- -D warnings";
         });
